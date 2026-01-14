@@ -15,17 +15,15 @@ public class ClassesPanel extends JPanel {
     private final JTable tblClasses;
     private final DefaultTableModel model;
 
-    // inputs (נשארים בשביל Update/Delete)
-    private final JTextField txtId = new JTextField(8);          // read-only
+    private final JTextField txtId = new JTextField(8);
     private final JTextField txtName = new JTextField(20);
     private final JComboBox<ClassType> cmbType = new JComboBox<>();
-    private final JTextField txtDate = new JTextField(10);       // YYYY-MM-DD or DD-MM-YYYY
-    private final JTextField txtStart = new JTextField(8);       // HH:MM
-    private final JTextField txtEnd = new JTextField(8);         // HH:MM
+    private final JTextField txtDate = new JTextField(10);
+    private final JTextField txtStart = new JTextField(8);
+    private final JTextField txtEnd = new JTextField(8);
     private final JTextField txtMax = new JTextField(5);
     private final JTextField txtConsultantId = new JTextField(12);
 
-    // Tips (optional) - נשאר עבור Update
     private final JCheckBox chkAddTips = new JCheckBox("Add tips (optional)");
     private final DefaultListModel<String> tipsModel = new DefaultListModel<>();
     private final JList<String> lstTips = new JList<>(tipsModel);
@@ -76,7 +74,7 @@ public class ClassesPanel extends JPanel {
 
         txtId.setEditable(false);
         loadClassTypes();
-        refreshTable();          // טעינה אוטומטית בהתחלה
+        refreshTable();
 
         setTipsEnabled(false);
         lstTips.setVisibleRowCount(5);
@@ -207,13 +205,11 @@ public class ClassesPanel extends JPanel {
         });
     }
 
-    // ✅ FIXED: now the table shows tips correctly
+    // ✅ table shows tips correctly
     private void refreshTable() {
         model.setRowCount(0);
 
         for (Classes cl : ClassController.getInstance().getClasses()) {
-
-            // load full class including tips
             Classes full = ClassController.getInstance().getClassById(cl.getClassId());
             String tips = (full == null) ? null : full.getClassTips();
 
@@ -401,7 +397,6 @@ public class ClassesPanel extends JPanel {
             if (id.isEmpty()) throw new IllegalArgumentException("Class ID is required");
         }
 
-        // tips
         String tips = null;
         if (chkAddTips.isSelected() && tipsModel.size() > 0) {
             StringBuilder sb = new StringBuilder();
@@ -410,6 +405,22 @@ public class ClassesPanel extends JPanel {
                 sb.append(tipsModel.get(i));
             }
             tips = sb.toString();
+        }
+
+        // ✅ WARNING ONLY (still allow update)
+        LocalDate today = LocalDate.now();
+        LocalTime now = LocalTime.now().withSecond(0).withNano(0);
+
+        boolean pastDate = date.isBefore(today);
+        boolean startedAlreadyToday = date.isEqual(today) && !start.isAfter(now); // start <= now
+
+        if (pastDate || startedAlreadyToday) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Warning: The details shown may be invalid. Please check the date and time.",
+                    "Warning",
+                    JOptionPane.WARNING_MESSAGE
+            );
         }
 
         return new Classes(

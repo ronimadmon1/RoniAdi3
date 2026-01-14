@@ -211,6 +211,22 @@ public class AddClassDialog extends JDialog {
                 tips = sb.toString();
             }
 
+            // ✅ WARNING ONLY (still allow saving)
+            LocalDate today = LocalDate.now();
+            LocalTime now = LocalTime.now().withSecond(0).withNano(0);
+
+            boolean pastDate = date.isBefore(today);
+            boolean startedAlreadyToday = date.isEqual(today) && !start.isAfter(now); // start <= now
+
+            if (pastDate || startedAlreadyToday) {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Warning: The details shown may be invalid. Please check the date and time.",
+                        "Warning",
+                        JOptionPane.WARNING_MESSAGE
+                );
+            }
+
             result = new Classes(
                     null,
                     name,
