@@ -57,7 +57,6 @@ public class ClassesPanel extends JPanel {
             }
         });
 
-        // נשארים רק הכפתורים האלה:
         JButton btnAdd = new JButton("Add");
         JButton btnUpdate = new JButton("Update");
         JButton btnDelete = new JButton("Delete");
@@ -208,9 +207,16 @@ public class ClassesPanel extends JPanel {
         });
     }
 
+    // ✅ FIXED: now the table shows tips correctly
     private void refreshTable() {
         model.setRowCount(0);
+
         for (Classes cl : ClassController.getInstance().getClasses()) {
+
+            // load full class including tips
+            Classes full = ClassController.getInstance().getClassById(cl.getClassId());
+            String tips = (full == null) ? null : full.getClassTips();
+
             model.addRow(new Object[]{
                     cl.getClassId(),
                     cl.getName(),
@@ -220,7 +226,7 @@ public class ClassesPanel extends JPanel {
                     cl.getEndTime(),
                     cl.getMaxParticipants(),
                     cl.getConsultantId(),
-                    tipsSummary(cl.getClassTips())
+                    tipsSummary(tips)
             });
         }
     }
@@ -235,11 +241,10 @@ public class ClassesPanel extends JPanel {
         return count + " tips";
     }
 
-    // ✅ ADD חדש: חלון יפה
     private void onAdd() {
         AddClassDialog dlg = new AddClassDialog(SwingUtilities.getWindowAncestor(this));
         Classes cl = dlg.showDialog();
-        if (cl == null) return; // cancel
+        if (cl == null) return;
 
         try {
             boolean ok = ClassController.getInstance().addClass(cl);
@@ -422,7 +427,7 @@ public class ClassesPanel extends JPanel {
 
     private LocalDate parseDate(String s) {
         try {
-            return LocalDate.parse(s); // YYYY-MM-DD
+            return LocalDate.parse(s);
         } catch (Exception ignored) {}
 
         try {
@@ -431,7 +436,7 @@ public class ClassesPanel extends JPanel {
             int day = Integer.parseInt(p[0]);
             int month = Integer.parseInt(p[1]);
             int year = Integer.parseInt(p[2]);
-            return LocalDate.of(year, month, day); // DD-MM-YYYY
+            return LocalDate.of(year, month, day);
         } catch (Exception ignored) {}
 
         throw new IllegalArgumentException("Date must be YYYY-MM-DD or DD-MM-YYYY");
@@ -439,7 +444,7 @@ public class ClassesPanel extends JPanel {
 
     private LocalTime parseTime(String s, String fieldName) {
         try {
-            return LocalTime.parse(s); // HH:MM
+            return LocalTime.parse(s);
         } catch (Exception e) {
             throw new IllegalArgumentException(fieldName + " must be in format HH:MM");
         }

@@ -26,16 +26,20 @@ public class Consts {
             "FROM Class_Type " +
             "ORDER BY Class_Type_Name";
 
+    // ✅ UPDATED: include TipsCount from Class_Tips
     public static final String SQL_SEL_CLASSES =
-            "SELECT Class_ID, Class_Name, Class_Type, Class_Date, Start_Time, End_Time, " +
-            "Max_Participants, Consultant_ID " +
-            "FROM Classes " +
-            "ORDER BY Class_Date, Start_Time";
+            "SELECT c.Class_ID, c.Class_Name, c.Class_Type, c.Class_Date, c.Start_Time, c.End_Time, " +
+            "c.Max_Participants, c.Consultant_ID, " +
+            "(SELECT COUNT(*) FROM Class_Tips t WHERE t.class_id = c.Class_ID) AS TipsCount " +
+            "FROM Classes AS c " +
+            "ORDER BY c.Class_Date, c.Start_Time";
 
+    // ✅ UPDATED: include TipsCount
     public static final String SQL_SEL_CLASS_BY_ID =
-            "SELECT Class_ID, Class_Name, Class_Type, Class_Date, Start_Time, End_Time, " +
-            "Max_Participants, Consultant_ID " +
-            "FROM Classes WHERE Class_ID = ?";
+            "SELECT c.Class_ID, c.Class_Name, c.Class_Type, c.Class_Date, c.Start_Time, c.End_Time, " +
+            "c.Max_Participants, c.Consultant_ID, " +
+            "(SELECT COUNT(*) FROM Class_Tips t WHERE t.class_id = c.Class_ID) AS TipsCount " +
+            "FROM Classes AS c WHERE c.Class_ID = ?";
 
     public static final String SQL_SEL_ACTIVE_REG_COUNT =
             "SELECT COUNT(*) " +
@@ -53,9 +57,11 @@ public class Consts {
     public static final String SQL_SEL_TRAINEE_HAS_GROUP =
             "SELECT COUNT(*) FROM " + GROUP_REG_TABLE + " WHERE Trainee_ID = ?";
 
+    // ✅ UPDATED: include TipsCount for trainee assigned classes
     public static final String SQL_SEL_ASSIGNED_CLASSES_FOR_TRAINEE =
             "SELECT DISTINCT c.Class_ID, c.Class_Name, c.Class_Type, c.Class_Date, " +
-            "c.Start_Time, c.End_Time, c.Max_Participants, c.Consultant_ID " +
+            "c.Start_Time, c.End_Time, c.Max_Participants, c.Consultant_ID, " +
+            "(SELECT COUNT(*) FROM Class_Tips t WHERE t.class_id = c.Class_ID) AS TipsCount " +
             "FROM (Classes AS c " +
             "INNER JOIN Plan_Class_Assignment AS pca ON c.Class_ID = pca.Class_ID) " +
             "WHERE pca.Plan_ID IN ( " +
@@ -121,7 +127,7 @@ public class Consts {
     public static final String SQL_DEL_TIPS_FOR_CLASS =
             "DELETE FROM Class_Tips WHERE class_id = ?";
 
-    // ✅ NEW: overlapping classes check (warn if overlap)
+    // overlapping classes check
     public static final String SQL_SEL_OVERLAPPING_CLASSES_FOR_TRAINEE =
             "SELECT COUNT(*) " +
             "FROM (Class_Registration CR " +

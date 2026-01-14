@@ -104,7 +104,6 @@ public class ClassController {
         }
     }
 
-    // ✅ FIXED: return false when not in use
     private boolean isClassTypeInUse(int typeId) {
         try {
             Class.forName("net.ucanaccess.jdbc.UcanaccessDriver");
@@ -116,9 +115,8 @@ public class ClassController {
                     if (rs.next()) return rs.getInt(1) > 0;
                 }
             }
-            return false; // ✅ not in use
+            return false;
         } catch (Exception e) {
-            // safer default: don't delete if DB error
             return true;
         }
     }
@@ -143,6 +141,8 @@ public class ClassController {
                  ResultSet rs = stmt.executeQuery()) {
 
                 while (rs.next()) {
+                    // כאן אנחנו לא טוענים טיפים מלאים כדי לא להעמיס.
+                    // הטיפים נטענים ב-getClassById כאשר בוחרים שורה.
                     results.add(mapClasses(rs));
                 }
             }
@@ -153,6 +153,8 @@ public class ClassController {
     }
 
     public Classes getClassById(String classId) {
+        if (classId == null || classId.isBlank()) return null;
+
         try {
             Class.forName("net.ucanaccess.jdbc.UcanaccessDriver");
             try (Connection conn = DriverManager.getConnection(Consts.CONN_STR);
@@ -161,13 +163,17 @@ public class ClassController {
                 stmt.setString(1, classId);
 
                 try (ResultSet rs = stmt.executeQuery()) {
-                    if (rs.next()) return mapClasses(rs);
+                    if (!rs.next()) return null;
+
+                    Classes base = mapClasses(rs);
+                    String tips = loadTipsAsMultilineString(conn, classId);
+                    base.setClassTips(tips);
+                    return base;
                 }
             }
         } catch (Exception e) {
             throw new RuntimeException("Get class by ID failed: " + e.getMessage(), e);
         }
-        return null;
     }
 
     public boolean addClass(Classes c) {
@@ -176,11 +182,13 @@ public class ClassController {
         try {
             Class.forName("net.ucanaccess.jdbc.UcanaccessDriver");
             try (Connection conn = DriverManager.getConnection(Consts.CONN_STR)) {
+                conn.setAutoCommit(false);
 
                 if (c.getClassId() == null || c.getClassId().isBlank()) {
                     c.setClassId(generateNextClassId(conn));
                 }
 
+                // 1) insert class
                 try (PreparedStatement stmt = conn.prepareStatement(Consts.SQL_INS_CLASS)) {
 
                     int i = 1;
@@ -194,8 +202,14 @@ public class ClassController {
                     stmt.setString(i++, c.getConsultantId());
 
                     stmt.executeUpdate();
-                    return true;
                 }
+
+                // 2) insert tips (if any)
+                saveTips(conn, c.getClassId(), c.getClassTips());
+
+                conn.commit();
+                return true;
+
             }
         } catch (Exception e) {
             throw new RuntimeException("Add class failed: " + e.getMessage(), e);
@@ -210,20 +224,30 @@ public class ClassController {
 
         try {
             Class.forName("net.ucanaccess.jdbc.UcanaccessDriver");
-            try (Connection conn = DriverManager.getConnection(Consts.CONN_STR);
-                 PreparedStatement stmt = conn.prepareStatement(Consts.SQL_UPD_CLASS)) {
+            try (Connection conn = DriverManager.getConnection(Consts.CONN_STR)) {
+                conn.setAutoCommit(false);
 
-                int i = 1;
-                stmt.setString(i++, c.getName());
-                stmt.setInt(i++, c.getClassTypeId());
-                stmt.setDate(i++, Date.valueOf(c.getClassDate()));
-                stmt.setTime(i++, Time.valueOf(c.getStartTime()));
-                stmt.setTime(i++, Time.valueOf(c.getEndTime()));
-                stmt.setInt(i++, c.getMaxParticipants());
-                stmt.setString(i++, c.getConsultantId());
-                stmt.setString(i++, c.getClassId());
+                // 1) update class
+                try (PreparedStatement stmt = conn.prepareStatement(Consts.SQL_UPD_CLASS)) {
 
-                stmt.executeUpdate();
+                    int i = 1;
+                    stmt.setString(i++, c.getName());
+                    stmt.setInt(i++, c.getClassTypeId());
+                    stmt.setDate(i++, Date.valueOf(c.getClassDate()));
+                    stmt.setTime(i++, Time.valueOf(c.getStartTime()));
+                    stmt.setTime(i++, Time.valueOf(c.getEndTime()));
+                    stmt.setInt(i++, c.getMaxParticipants());
+                    stmt.setString(i++, c.getConsultantId());
+                    stmt.setString(i++, c.getClassId());
+
+                    stmt.executeUpdate();
+                }
+
+                // 2) replace tips (delete + insert)
+                deleteTipsForClass(conn, c.getClassId());
+                saveTips(conn, c.getClassId(), c.getClassTips());
+
+                conn.commit();
                 return true;
             }
         } catch (Exception e) {
@@ -232,13 +256,22 @@ public class ClassController {
     }
 
     public boolean deleteClass(String classId) {
+        if (classId == null || classId.isBlank()) return false;
+
         try {
             Class.forName("net.ucanaccess.jdbc.UcanaccessDriver");
-            try (Connection conn = DriverManager.getConnection(Consts.CONN_STR);
-                 PreparedStatement stmt = conn.prepareStatement(Consts.SQL_DEL_CLASS)) {
+            try (Connection conn = DriverManager.getConnection(Consts.CONN_STR)) {
+                conn.setAutoCommit(false);
 
-                stmt.setString(1, classId);
-                stmt.executeUpdate();
+                // קודם מוחקים טיפים כדי לא להשאיר יתומים
+                deleteTipsForClass(conn, classId);
+
+                try (PreparedStatement stmt = conn.prepareStatement(Consts.SQL_DEL_CLASS)) {
+                    stmt.setString(1, classId);
+                    stmt.executeUpdate();
+                }
+
+                conn.commit();
                 return true;
             }
         } catch (Exception e) {
@@ -312,7 +345,73 @@ public class ClassController {
                 endTime,
                 maxParticipants,
                 consultantId,
-                null
+                null // tips נטענים ב-getClassById
         );
+    }
+
+    // ---------- tips helpers ----------
+
+    private String loadTipsAsMultilineString(Connection conn, String classId) throws SQLException {
+        StringBuilder sb = new StringBuilder();
+
+        try (PreparedStatement ps = conn.prepareStatement(Consts.SQL_SEL_TIPS_BY_CLASS_ID)) {
+            ps.setString(1, classId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String link = rs.getString("resource_link");
+                    String text = rs.getString("tip_text");
+
+                    String line = null;
+                    if (text != null && !text.isBlank()) line = text.trim();
+                    else if (link != null && !link.isBlank()) line = link.trim();
+
+                    if (line != null) {
+                        if (sb.length() > 0) sb.append("\n");
+                        sb.append(line);
+                    }
+                }
+            }
+        }
+
+        return sb.length() == 0 ? null : sb.toString();
+    }
+
+    private void deleteTipsForClass(Connection conn, String classId) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(Consts.SQL_DEL_TIPS_FOR_CLASS)) {
+            ps.setString(1, classId);
+            ps.executeUpdate();
+        }
+    }
+
+    private void saveTips(Connection conn, String classId, String tipsMultiline) throws SQLException {
+        if (tipsMultiline == null || tipsMultiline.isBlank()) return;
+
+        String[] lines = tipsMultiline.split("\\R");
+        int tipId = 1;
+
+        for (String raw : lines) {
+            if (tipId > 5) break;
+            String tip = raw.trim();
+            if (tip.isEmpty()) continue;
+
+            String link = null;
+            String text = tip;
+
+            if (tip.startsWith("http://") || tip.startsWith("https://")) {
+                link = tip;
+                text = null;
+            }
+
+            try (PreparedStatement ps = conn.prepareStatement(Consts.SQL_INS_TIP)) {
+                ps.setInt(1, tipId);
+                ps.setString(2, classId);
+                ps.setString(3, link);
+                ps.setString(4, text);
+                ps.executeUpdate();
+            }
+
+            tipId++;
+        }
     }
 }
