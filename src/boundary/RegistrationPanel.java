@@ -20,7 +20,6 @@ public class RegistrationPanel extends JPanel {
     private final JButton btnRegister = new JButton("Register");
     private final JButton btnCancel = new JButton("Cancel Registration");
 
-    // model indexes (model, not view)
     private static final int COL_CLASS_ID = 0;
     private static final int COL_STATUS = 8;
     private static final int COL_CAN_REGISTER = 9;
@@ -42,30 +41,24 @@ public class RegistrationPanel extends JPanel {
         tbl = new JTable(model);
         tbl.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 
-        // hide helper columns
         hideColumn(COL_CAN_REGISTER);
         hideColumn(COL_CAN_CANCEL);
 
-        // actions
         btnBrowseEligible.addActionListener(e -> loadEligibleAssigned());
         btnRegister.addActionListener(e -> onRegister());
         btnCancel.addActionListener(e -> onCancel());
 
-        // Enter loads eligible classes
         txtTraineeId.addActionListener(e -> loadEligibleAssigned());
 
-        // enable/disable buttons by selection
         tbl.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) updateButtons();
         });
 
-        // top
         JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT));
         top.add(new JLabel("Trainee ID:"));
         top.add(txtTraineeId);
         top.add(btnBrowseEligible);
 
-        // bottom
         JPanel bottom = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         bottom.add(btnRegister);
         bottom.add(btnCancel);
@@ -77,8 +70,6 @@ public class RegistrationPanel extends JPanel {
 
         updateButtons();
     }
-
-    // ---------- UI helpers ----------
 
     private void hideColumn(int modelIndex) {
         int viewIndex = tbl.convertColumnIndexToView(modelIndex);
@@ -120,8 +111,6 @@ public class RegistrationPanel extends JPanel {
         btnCancel.setEnabled(rowCanCancel(r));
     }
 
-    // ---------- Load Eligible (only what fits trainee plan types) ----------
-
     private void loadEligibleAssigned() {
         model.setRowCount(0);
 
@@ -143,7 +132,7 @@ public class RegistrationPanel extends JPanel {
                         c.getClassDate(),
                         c.getStartTime(),
                         c.getEndTime(),
-                        row.getAudience(),      // Personal / Group / Both
+                        row.getAudience(),
                         row.getCapacity(),
                         row.getRegistered(),
                         row.getStatus(),
@@ -153,8 +142,8 @@ public class RegistrationPanel extends JPanel {
             }
 
             if (model.getRowCount() == 0) {
-                JOptionPane.showMessageDialog(this, "No eligible classes found for this trainee.", "Info",
-                        JOptionPane.INFORMATION_MESSAGE);
+                JOptionPane.showMessageDialog(this, "No eligible classes found for this trainee.",
+                        "Info", JOptionPane.INFORMATION_MESSAGE);
             }
 
         } catch (Exception ex) {
@@ -164,8 +153,6 @@ public class RegistrationPanel extends JPanel {
         tbl.clearSelection();
         updateButtons();
     }
-
-    // ---------- Actions ----------
 
     private void onRegister() {
         String traineeId = txtTraineeId.getText().trim();
